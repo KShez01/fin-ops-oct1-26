@@ -1,0 +1,4448 @@
+# Python Financial Processing Engine
+## Master Product, Financial, Architecture and Development Instructions
+
+---
+
+# 1. YOUR ROLE
+
+Act as the Principal Financial Systems Architect and Lead Python Backend Engineer responsible for designing and implementing a production-grade financial batch-processing and ledger engine.
+
+This is not a generic CRUD application and not merely a batch-file parser.
+
+The completed system must be capable of receiving financial instructions, resolving the correct customer/program relationship, applying deterministic financial policy, protecting funds from double use, creating balanced accounting evidence, planning external money movement, reconciling results, notifying external partners, and preserving enough durable evidence to explain every outcome later.
+
+Operate conservatively around money.
+
+When a business rule materially affects:
+
+- who owns value;
+- whether value is available;
+- whether value may be consumed;
+- how much money moves;
+- how a refund is funded;
+- how accounting is posted;
+- how a reversal behaves;
+
+do not invent the missing rule.
+
+Record an `OPEN_QUESTION` and continue only with work that does not depend on that unresolved financial decision.
+
+---
+
+# 2. PRODUCT OBJECTIVE
+
+Build a Python financial engine that can process customer-level Clearing and Settlement files end to end.
+
+The conceptual lifecycle is:
+
+```text
+Receive
+→ Preserve Evidence
+→ Parse
+→ Normalize
+→ Validate
+→ Resolve Customer / Program
+→ Identify Instruction
+→ Resolve Dependencies
+→ Decide Financial Treatment
+→ Evaluate Availability
+→ Reserve
+→ Create Financial Transaction
+→ Post Accounting
+→ Update Financial Positions
+→ Create Durable Follow-Up Work
+→ Plan Money Movement
+→ Reconcile
+→ Notify
+→ Audit
+```
+
+The engine must always be able to answer:
+
+```text
+What instruction arrived?
+
+Where did it come from?
+
+Which customer/program did it belong to?
+
+Was the instruction valid?
+
+Was it already processed?
+
+What business/root transaction did it relate to?
+
+What financial value did it represent?
+
+Which financial positions supported it?
+
+Was value reserved?
+
+Which financial positions changed?
+
+Which journal entries prove those changes?
+
+What external money movement was required?
+
+Was a payment file generated?
+
+Did the bank actually settle it?
+
+Was the external partner notified?
+
+Can the full result be reconstructed later?
+```
+
+If durable system evidence cannot answer these questions, the implementation is incomplete.
+
+---
+
+# 3. ARCHITECTURE
+
+Build a modular monolith.
+
+Use:
+
+```text
+Python 3.12+
+FastAPI
+Pydantic v2
+SQLAlchemy 2.x
+PostgreSQL
+Alembic
+pytest
+Hypothesis
+```
+
+Use:
+
+```text
+one Python application
+one PostgreSQL database
+clear internal domain modules
+PostgreSQL-backed workers where asynchronous work is required
+```
+
+Do not begin with:
+
+```text
+microservices
+RabbitMQ
+Kafka
+Kubernetes
+Redis
+distributed transactions
+event-broker infrastructure
+```
+
+These are not required to build a reliable first version.
+
+Prefer strong PostgreSQL transactional semantics over distributed architecture.
+
+Financial correctness, recovery and explainability are higher priorities than architectural novelty.
+
+---
+
+# 4. MODULE BOUNDARIES
+
+The application should remain one deployable application while maintaining clear internal boundaries.
+
+Recommended modules:
+
+```text
+app/
+    reference/
+    intake/
+    identity/
+    transactions/
+    policy/
+    reservations/
+    ledger/
+    positions/
+    movements/
+    reconciliation/
+    notifications/
+    workflow/
+    operations/
+    security/
+```
+
+Do not build one giant transaction-processing service.
+
+Financial policy must remain independently testable.
+
+Expected policy/service components include concepts equivalent to:
+
+```text
+CustomerProgramResolver
+
+ClearingValidationPolicy
+SettlementValidationPolicy
+
+InstructionIdentityPolicy
+
+IncomingPaymentPolicy
+PaymentRefundPolicy
+
+SettlementEligibilityPolicy
+ReservationPolicy
+
+CPPPolicy
+CPCPolicy
+
+RefundRoutingPolicy
+CompletionCancellationPolicy
+
+SettlementFeePolicy
+
+LedgerEventFactory
+PostingTemplateRegistry
+PostingEngine
+
+MoneyMovementPlanner
+
+RailAmountPolicy
+BeneficiaryAuthorityPolicy
+
+ReconciliationService
+SettlementNotificationBuilder
+
+WorkflowJobProcessor
+```
+
+Names may differ, but responsibilities must remain separated.
+
+---
+
+# 5. SCOPE CONTROL
+
+The solution will be developed in controlled financial capabilities.
+
+A transaction type or source adapter must not become financially active merely because parsing support exists.
+
+Before enabling any financial capability, all of the following must exist:
+
+```text
+identity mapping
+
+monetary component definitions
+
+validation rules
+
+dependency rules
+
+eligibility rules
+
+reservation behavior
+
+posting template
+
+state transitions
+
+idempotency strategy
+
+reversal/correction behavior where applicable
+
+acceptance fixtures
+
+tests
+```
+
+Support configuration such as:
+
+```text
+enabled source adapters
+enabled transaction types
+enabled programs
+enabled partners
+bank file generation enabled/disabled
+external notification enabled/disabled
+```
+
+The engine should fail closed for a financial capability that has not been explicitly enabled.
+
+---
+
+# 6. CURRENT CORE SCOPE
+
+The current implementation must support the financial engine required for:
+
+## Clearing
+
+```text
+IM
+CPR
+```
+
+## Settlement / financial actions
+
+```text
+CPP
+CPC
+CPR
+CPRR
+CPRRW
+CPCN
+```
+
+## System-derived outcomes
+
+```text
+CPRRWX
+PFP
+VPF
+```
+
+Also implement:
+
+```text
+reference data
+batch/file intake
+customer/program resolution
+financial transaction lifecycle
+dependencies
+reservations
+double-entry accounting
+financial positions
+reversals
+decision audit
+money-movement planning
+source reconciliation
+accounting reconciliation
+notification outbox
+query/operations API
+CLI tools
+```
+
+---
+
+# 7. CURRENTLY OUT OF SCOPE
+
+Do not expand this project into a complete customer-management platform.
+
+The financial engine does not presently need to own:
+
+```text
+KYC
+identity-verification provider integration
+customer onboarding UI
+card issuance
+CRM
+general customer servicing
+full payment gateway
+front-end application
+```
+
+Reference Customer and CustomerProgram records are still required.
+
+Provide a controlled way to import or administer that reference data.
+
+---
+
+# 8. DEFERRED BUT ARCHITECTURALLY SUPPORTED
+
+The architecture should permit these later without requiring them for the first financial engine:
+
+```text
+automated bank-settlement matching
+bank-return accounting
+advanced bank evidence ingestion
+additional rails
+additional source adapters
+advanced program lifecycle
+high-scale distributed workers
+```
+
+Do not implement speculative features unless needed by the current phase.
+
+---
+
+# 9. INPUT FILE TYPES
+
+Support:
+
+```text
+1000 = CLEARING
+2000 = SETTLEMENT
+```
+
+Unknown record types are rejected.
+
+All parsing happens through source adapters.
+
+The core financial domain must not depend directly on pipe-delimited file structures.
+
+---
+
+# 10. CLEARING FORMAT
+
+Clearing source currently contains:
+
+```text
+0   RecordType
+1   RecordId
+2   BatchId
+3   BatchFileDate
+4   BatchTransactionDateRange
+5   PartnerId
+6   PartnerCustomerId
+7   CustomerId
+8   ProgramId
+9   CustomerFirstName
+10  CustomerLastName
+11  CustomerVirtualAccountNumber
+12  PaymentType
+13  CardType
+14  CardNumber
+15  AuthDateTime
+16  MerchantId
+17  TransType
+18  TransCode
+19  AuthCode
+20  AccountNumber
+21  RoutingNumber
+22  BankName
+23  SettlementDate
+24  TransAuthAmount
+25  TransApprovedAmount
+26  NetSettlementAmount
+27  ProcessingFee
+28  DiscountFee
+29  CustomerFee
+```
+
+Preserve original values before normalization.
+
+Do not persist full card PAN into normal domain tables unless an explicitly approved requirement demands it.
+
+---
+
+# 11. SETTLEMENT FORMAT
+
+Settlement source currently contains:
+
+```text
+0   RecordType
+1   RecordId
+2   BatchId
+3   BatchFileDate
+4   PartnerId
+5   PartnerCustomerId
+6   CustomerId
+7   ProgramId
+8   CustomerFirstName
+9   CustomerLastName
+10  CustomerVirtualAccountNumber
+11  AccountNumber
+12  BankName
+13  RoutingNumber
+14  AccountType
+15  TransCode
+16  PartnerFee
+17  CustomerRefundAmount
+```
+
+Internal customer-program ID, processor fee, funding allocation and effective transaction treatment are derived by the application.
+
+They are not trusted from the file.
+
+---
+
+# 12. SOURCE EVIDENCE
+
+Every physical file must create immutable evidence.
+
+Create a model equivalent to:
+
+```text
+FileEvidence
+
+id
+partner_id
+
+original_filename
+record_type
+
+sha256
+file_size
+
+received_at
+source
+
+raw_storage_reference
+
+processing_status
+
+adapter_version
+correlation_id
+```
+
+Raw evidence must be immutable.
+
+Calculate a SHA-256 fingerprint before processing.
+
+Do not treat the physical SFTP folder as authoritative financial state.
+
+Database state is authoritative.
+
+---
+
+# 13. BATCH MODEL
+
+Create:
+
+```text
+Batch
+
+id
+file_evidence_id
+
+partner_id
+external_batch_id
+record_type
+
+received_at
+
+processing_status
+accounting_status
+movement_status
+reconciliation_status
+
+total_records
+accepted_records
+blocked_records
+rejected_records
+failed_records
+
+created_at
+completed_at
+```
+
+A batch can finish:
+
+```text
+COMPLETED
+PARTIALLY_COMPLETED
+FAILED
+```
+
+One bad row must not automatically roll back unrelated valid financial transactions.
+
+Financial isolation is normally per financial transaction.
+
+---
+
+# 14. SOURCE RECORD PRESERVATION
+
+Every source row creates:
+
+```text
+BatchRecord
+
+id
+batch_id
+row_number
+
+source_record_reference
+
+raw_line_reference
+raw_payload
+normalized_payload
+
+validation_status
+
+created_at
+```
+
+Rejected rows are retained.
+
+The platform must permanently distinguish:
+
+```text
+what arrived
+what was normalized
+what was accepted
+what was executed
+```
+
+Sensitive source evidence must be protected according to the security requirements below.
+
+---
+
+# 15. INSTRUCTION IDENTITY
+
+Do not assume that:
+
+```text
+RecordId
+AuthCode
+business reference
+financial transaction ID
+parent transaction
+idempotency key
+```
+
+mean the same thing.
+
+They are different concepts.
+
+Every source adapter MUST explicitly define:
+
+```text
+1. physical/source-record identity
+
+2. logical instruction identity
+
+3. business/root reference
+
+4. parent financial relationship
+
+5. retry/idempotency identity
+```
+
+Do not establish one universal formula such as:
+
+```text
+partner + record type + RecordId
+```
+
+without proving it for that adapter.
+
+The source adapter design must document exact mappings.
+
+Mandatory identity fixtures include:
+
+```text
+same instruction resent
+→ duplicate-safe
+
+same business authorization + later CPP
+→ allowed when financially eligible
+
+same business authorization + later CPC
+→ allowed when financially eligible
+
+same business authorization + refund
+→ allowed when financially eligible
+
+same idempotency identity + conflicting payload
+→ rejected
+```
+
+Authorization/root references are primarily relationship identifiers.
+
+They are not automatically idempotency identifiers.
+
+---
+
+# 16. IDEMPOTENCY
+
+Protect independently at:
+
+```text
+file
+batch
+source instruction
+financial transaction
+posting
+system-generated transaction
+money movement
+payment-file inclusion
+notification
+workflow job
+```
+
+Store where appropriate:
+
+```text
+idempotency_key
+normalized_payload_hash
+original_result
+```
+
+Behavior:
+
+```text
+same key + same normalized payload
+→ return existing result
+
+same key + materially different payload
+→ IDEMPOTENCY_CONFLICT
+```
+
+Database unique constraints must enforce critical idempotency boundaries.
+
+Do not rely only on application pre-checks.
+
+---
+
+# 17. CUSTOMER / PROGRAM RESOLUTION
+
+Before financial execution, each instruction must resolve to exactly one CustomerProgram.
+
+Use explicit identifiers such as:
+
+```text
+partner_id
+partner_customer_id
+program_id
+customer_id
+virtual/reference account
+```
+
+according to configured adapter policy.
+
+Results:
+
+```text
+0 matches
+→ REJECTED / UNKNOWN_CUSTOMER
+
+>1 matches
+→ IDENTITY_CONFLICT
+
+1 match
+→ resolved
+```
+
+Never guess.
+
+Never create a new financial customer automatically merely because a batch references one.
+
+---
+
+# 18. REFERENCE DATA
+
+Minimum reference entities:
+
+```text
+Partner
+Program
+Customer
+CustomerProgram
+PricingPolicy
+BankAccountConfiguration
+```
+
+CustomerProgram must identify:
+
+```text
+customer
+partner
+program
+
+financial status
+
+currency
+payment type
+
+external customer identifiers
+virtual/reference account
+```
+
+Provide controlled reference-data loading via one or more of:
+
+```text
+CLI
+admin API
+CSV/JSON import
+```
+
+No UI is required.
+
+---
+
+# 19. REFERENCE CONFIGURATION VERSIONING
+
+A financial result must remain reproducible after configuration changes.
+
+Persist the effective configuration actually used.
+
+At minimum track:
+
+```text
+adapter_version
+financial_ruleset_version
+
+pricing_policy_id
+pricing_policy_version
+
+posting_template_version
+
+bank_configuration_version
+```
+
+Do not build an unnecessarily generic policy framework.
+
+Version only financial configuration that materially changes financial behavior.
+
+A retry of an already accepted financial instruction must not silently use today's new pricing or routing configuration.
+
+---
+
+# 20. CANONICAL MONETARY COMPONENTS
+
+Do not use ambiguous amounts as the basis of financial policy.
+
+Fields such as:
+
+```text
+amount_requested
+amount_processed
+amount_settled
+```
+
+may exist for compatibility/reporting, but domain policy must operate on semantic monetary components.
+
+Support, where applicable:
+
+```text
+gross_requested_amount
+gross_accepted_amount
+
+incoming_cash_amount
+
+customer_principal_amount
+customer_fee_amount
+
+merchant_acquirer_fee_amount
+
+partner_claim_consumed_amount
+
+settlement_processor_fee_amount
+partner_net_payout_amount
+
+customer_refund_amount
+
+bank_movement_amount
+```
+
+Every transaction type must have a Monetary Component Matrix defining:
+
+```text
+source field
+semantic amount
+formula
+sign
+currency
+required/optional status
+```
+
+Do not implement a transaction type until its monetary matrix is unambiguous.
+
+---
+
+# 21. MONEY TYPE
+
+Use:
+
+```text
+Decimal
+```
+
+for every money calculation.
+
+Never use:
+
+```text
+float
+```
+
+Use at least:
+
+```text
+NUMERIC(18,3)
+```
+
+where three-decimal compatibility is required.
+
+Currency must always be explicit.
+
+No posting may combine currencies.
+
+---
+
+# 22. FINANCIAL POSITION ROLES
+
+At minimum support logical financial positions equivalent to:
+
+```text
+CUSTOMER_PRINCIPAL
+
+PARTNER_FEE_CLAIM
+
+PARTNER_EXTERNAL
+
+PROCESSOR_REVENUE
+
+POOL_CASH
+
+FUNDING
+
+REFUND_SETTLEMENT
+```
+
+The implementation must distinguish:
+
+```text
+economic ownership
+accounting classification
+physical cash account
+external settlement state
+```
+
+Do not collapse all of these into one customer balance.
+
+---
+
+# 23. FINANCIAL ACCOUNT MODEL
+
+Create:
+
+```text
+FinancialAccount
+
+id
+
+role
+
+account_class
+normal_side
+
+owner_scope
+
+partner_id
+program_id
+customer_program_id
+
+currency
+
+allow_negative
+
+active_from
+active_to
+```
+
+Account classes:
+
+```text
+ASSET
+LIABILITY
+REVENUE
+EXPENSE
+```
+
+Normal sides:
+
+```text
+DEBIT
+CREDIT
+```
+
+Owner scopes may include:
+
+```text
+SYSTEM
+PARTNER
+CUSTOMER_PROGRAM
+```
+
+The design phase must explicitly map every financial role to:
+
+```text
+account class
+normal side
+owner scope
+```
+
+Do not assume all account balances use:
+
+```text
+debit - credit
+```
+
+Balance interpretation depends on the account's normal side.
+
+---
+
+# 24. FEE TYPES
+
+Never collapse different fees into one field.
+
+Maintain separately:
+
+## Merchant / Acquirer Processing Fee
+
+Cost associated with incoming payment processing.
+
+## Customer Fee
+
+Value collected from the customer and economically attributable to the partner.
+
+Creates/supports:
+
+```text
+PARTNER_FEE_CLAIM
+```
+
+## Settlement Processor Fee
+
+Fee retained when a partner settlement occurs.
+
+Creates/supports:
+
+```text
+PROCESSOR_REVENUE
+```
+
+Each must remain independently traceable.
+
+---
+
+# 25. CLEARING VALIDATION
+
+Supported Clearing actions:
+
+```text
+IM
+CPR
+```
+
+Current payment types may include:
+
+```text
+CC
+DC
+ACH
+```
+
+Validation includes:
+
+```text
+ApprovedAmount >= AuthorizedAmount
+ApprovedAmount > 0
+```
+
+and where applicable:
+
+```text
+ApprovedAmount
+=
+NetSettlementAmount
++ DiscountFee
++ ProcessingFee
+```
+
+Validate:
+
+```text
+0 <= CustomerFee <= NetSettlementAmount
+```
+
+Also validate:
+
+```text
+source identity
+partner
+customer
+customer program
+program
+transaction reference
+amounts
+payment type
+authorization relationship
+transaction dates
+settlement dates
+bank information where required
+```
+
+---
+
+# 26. IM — INCOMING PAYMENT
+
+IM represents incoming customer funding.
+
+Required behavior:
+
+```text
+resolve customer program
+
+validate source instruction
+
+prevent duplicate financial effect
+
+determine semantic amounts
+
+recognize incoming cash
+
+recognize customer principal
+
+recognize customer fee claim
+
+retain original authorization/root reference
+
+create balanced accounting
+
+create required funding movement plan
+```
+
+Economic relationship:
+
+```text
+customer program value
+=
+customer principal
++
+customer fee
+```
+
+Do not combine merchant/acquirer processing fee with either customer principal or customer fee.
+
+---
+
+# 27. CPR — CLEARING REFUND / PAYMENT REVERSAL
+
+CPR must be related to its originating payment.
+
+Validate:
+
+```text
+original payment relationship exists or is resolvable
+
+same customer program
+
+amount is valid
+
+remaining reversible amount is sufficient
+```
+
+If the original payment has not arrived:
+
+```text
+BLOCKED
+```
+
+If the original exists but has not reached the financial prerequisite required by policy:
+
+```text
+BLOCKED
+```
+
+If it references another customer program:
+
+```text
+REJECTED
+```
+
+A blocked transaction must be reevaluated when its dependency becomes eligible.
+
+Do not repeatedly poll blindly.
+
+Create durable dependency/retry work.
+
+---
+
+# 28. TRANSACTION DEPENDENCIES
+
+Create:
+
+```text
+TransactionDependency
+
+id
+
+transaction_id
+depends_on_transaction_id
+
+dependency_type
+status
+
+created_at
+resolved_at
+```
+
+Examples:
+
+```text
+REQUIRES_ORIGINAL_PAYMENT
+
+REQUIRES_ORIGINAL_SETTLEMENT
+
+REQUIRES_PRIOR_COMPLETION
+
+REQUIRES_REVERSAL_TARGET
+```
+
+Do not rely on fragile string matching during later processing.
+
+---
+
+# 29. SETTLEMENT INPUT
+
+Accepted external Settlement actions:
+
+```text
+CPP
+CPC
+CPR
+CPRR
+CPRRW
+CPCN
+```
+
+System-derived outcomes:
+
+```text
+CPRRWX
+PFP
+VPF
+```
+
+Do not normally accept system-derived actions from an external adapter unless explicitly enabled.
+
+Persist both:
+
+```text
+requested_transaction_code
+effective_transaction_code
+```
+
+when policy transforms an instruction.
+
+---
+
+# 30. AVAILABILITY
+
+Financial eligibility must use:
+
+```text
+POSTED POSITION
+-
+ACTIVE RESERVATIONS
+```
+
+Do not simply read current posted balance.
+
+Do not simply infer availability from transaction statuses.
+
+Do not ignore already accepted in-flight financial commitments.
+
+---
+
+# 31. RESERVATION MODEL
+
+Create:
+
+```text
+Reservation
+
+id
+
+transaction_id
+
+customer_program_id
+financial_position
+
+amount
+currency
+
+status
+
+created_at
+captured_at
+released_at
+cancelled_at
+```
+
+Statuses:
+
+```text
+CONTINGENT
+ACTIVE
+CAPTURED
+RELEASED
+CANCELLED
+```
+
+Meaning:
+
+## CONTINGENT
+
+The transaction is waiting for expected financial support or another prerequisite.
+
+It does not mean the money is presently secured.
+
+It must not reduce presently available posted funds unless the specific financial policy explicitly says otherwise.
+
+## ACTIVE
+
+Existing value has been allocated to the transaction.
+
+It reduces availability.
+
+## CAPTURED
+
+The committed accounting posting consumed the reserved position.
+
+## RELEASED
+
+Previously allocated value has returned to availability.
+
+## CANCELLED
+
+The reservation became permanently unnecessary before capture.
+
+Processing status and reservation status are separate concepts.
+
+A `BLOCKED` transaction may have:
+
+```text
+no reservation
+CONTINGENT reservation
+ACTIVE reservation
+```
+
+depending on policy.
+
+Reservation capture and the posting that consumes the value must be atomic.
+
+---
+
+# 32. CPP
+
+CPP settles collected partner fee claim.
+
+Requested gross:
+
+```text
+PartnerFee
+```
+
+Eligibility:
+
+```text
+available PARTNER_FEE_CLAIM
+>= gross requested
+```
+
+A transaction may become blocked/contingent if the referenced incoming financial support is pending and policy permits such treatment.
+
+Processor fee is calculated using:
+
+```text
+SettlementFeePolicy
+```
+
+Then:
+
+```text
+partner_net_payout_amount
+=
+gross_accepted_amount
+-
+settlement_processor_fee_amount
+```
+
+Economic result:
+
+```text
+PARTNER_FEE_CLAIM decreases by gross claim consumed
+
+PARTNER_EXTERNAL increases by partner net
+
+PROCESSOR_REVENUE increases by processor fee
+```
+
+Invariant:
+
+```text
+gross claim consumed
+=
+partner net payout
++
+processor fee
+```
+
+---
+
+# 33. SETTLEMENT PRICING
+
+Settlement processor fee must be configuration-driven.
+
+Support concepts such as:
+
+```text
+PERCENTAGE
+FIXED
+TIERED
+SOURCE_PROVIDED
+ZERO
+```
+
+Pricing may vary by:
+
+```text
+partner
+program
+effective date
+transaction type
+```
+
+Every calculation stores:
+
+```text
+pricing_policy_id
+pricing_policy_version
+basis_amount
+calculated_fee
+```
+
+Never bury a commercial percentage directly inside CPP or CPC code.
+
+---
+
+# 34. CPC
+
+CPC represents program-completion settlement.
+
+Gross request:
+
+```text
+PartnerFee
+```
+
+Eligibility uses supported value from:
+
+```text
+PARTNER_FEE_CLAIM
++
+CUSTOMER_PRINCIPAL
+```
+
+The transaction must record the exact allocation.
+
+Default deterministic economic allocation requirement:
+
+```text
+consume eligible partner fee claim
+
+then consume required remaining amount
+from customer principal
+```
+
+Do not silently choose another order.
+
+If business acceptance fixtures define another order, the fixture wins and this rule must be revised explicitly.
+
+Allocation components must equal the gross accepted CPC amount.
+
+Then calculate:
+
+```text
+settlement processor fee
+partner net payout
+```
+
+A program completion obligation cannot be consumed twice.
+
+---
+
+# 35. PROGRAM FINANCIAL LIFECYCLE
+
+Implement only enough financial lifecycle to protect CPC/CPCN behavior.
+
+Do not build a broad CRM workflow.
+
+A lightweight model may include:
+
+```text
+OPEN
+COMPLETION_PENDING
+COMPLETED
+CANCELLATION_PENDING
+CANCELLED
+```
+
+Use it for:
+
+```text
+duplicate completion protection
+remaining completion obligation
+CPCN eligibility
+completion reversal/cancellation
+```
+
+Administrative customer status and financial completion status are different concepts.
+
+---
+
+# 36. NEGATIVE SETTLEMENT INSTRUCTIONS
+
+Do not process arbitrary negative CPP/CPC values as ordinary settlements.
+
+Normalize a legitimate negative correction into an explicit settlement reversal.
+
+A reversal must identify:
+
+```text
+original settlement
+remaining reversible amount
+same partner
+same customer program
+```
+
+Never create an unexplained negative payout.
+
+---
+
+# 37. CPRR
+
+CPRR refunds customer principal.
+
+Eligibility:
+
+```text
+available CUSTOMER_PRINCIPAL
+>= requested refund
+```
+
+Economic support must originate from customer principal unless a different explicit refund route is selected.
+
+---
+
+# 38. CPRRW
+
+CPRRW is a requested refund whose effective funding route is determined by current financial support.
+
+Persist:
+
+```text
+requested_code = CPRRW
+effective_code = determined result
+```
+
+Possible routing outcomes:
+
+## Principal sufficient
+
+```text
+effective = CPRR
+```
+
+## Principal plus internal fee support sufficient
+
+Use an explicitly defined fee-inclusive refund treatment.
+
+## Wider support required
+
+May become:
+
+```text
+CPRRWX
+```
+
+and use eligible positions such as:
+
+```text
+PARTNER_EXTERNAL
+PROCESSOR_REVENUE
+PARTNER_FEE_CLAIM
+```
+
+only according to an approved RefundRoutingPolicy.
+
+## Insufficient total eligible support
+
+```text
+REJECTED
+```
+
+Every route decision must be durable and explainable.
+
+---
+
+# 39. CPRRWX
+
+CPRRWX is system-derived.
+
+It can represent an extended refund route that may unwind value associated with:
+
+```text
+PARTNER_EXTERNAL
+PROCESSOR_REVENUE
+PARTNER_FEE_CLAIM
+```
+
+before establishing a customer refund.
+
+Do not accept it externally unless explicitly enabled.
+
+---
+
+# 40. CPCN
+
+CPCN represents cancellation/unwind of completion-related financial history.
+
+It must relate to an actual prior economic completion.
+
+It may need to unwind:
+
+```text
+PARTNER_EXTERNAL
+PARTNER_FEE_CLAIM
+PROCESSOR_REVENUE
+```
+
+and restore/refund eligible customer value.
+
+Never create greater refund or restored value than the remaining reversible economic effect.
+
+---
+
+# 41. PFP
+
+PFP is system-generated.
+
+It represents the processor-fee component associated with a parent settlement.
+
+Store:
+
+```text
+source = SYSTEM
+parent_transaction_id
+```
+
+Its amount must equal the processor fee attributed to the parent transaction.
+
+It must never independently consume customer principal.
+
+---
+
+# 42. VPF
+
+VPF is system-generated control activity for a processor-fee expectation that must be held, voided or unwound because its parent settlement/refund lifecycle changed.
+
+It is not customer money.
+
+It must always identify its financial parent.
+
+---
+
+# 43. FINANCIAL TRANSACTION MODEL
+
+Create approximately:
+
+```text
+FinancialTransaction
+
+id
+
+batch_id
+batch_record_id
+
+partner_id
+customer_id
+customer_program_id
+program_id
+
+source_instruction_id
+
+business_reference
+authorization_reference
+
+parent_transaction_id
+
+requested_transaction_code
+effective_transaction_code
+
+payment_type
+account_type
+
+gross_requested_amount
+gross_accepted_amount
+
+incoming_cash_amount
+
+customer_principal_amount
+customer_fee_amount
+
+merchant_acquirer_fee_amount
+
+partner_claim_consumed_amount
+
+settlement_processor_fee_amount
+partner_net_payout_amount
+
+customer_refund_amount
+bank_movement_amount
+
+source
+
+processing_status
+accounting_status
+movement_status
+reconciliation_status
+notification_status
+
+source_idempotency_key
+
+financial_ruleset_version
+pricing_policy_id
+pricing_policy_version
+posting_template_version
+
+created_at
+updated_at
+```
+
+Not every amount applies to every transaction.
+
+Unused semantic values should remain null or zero according to a documented convention.
+
+---
+
+# 44. SEPARATE STATE DIMENSIONS
+
+Maintain separate states for:
+
+## Processing
+
+```text
+RECEIVED
+VALIDATED
+PENDING
+BLOCKED
+PROCESSING
+COMPLETED
+REJECTED
+FAILED
+```
+
+## Accounting
+
+```text
+NOT_POSTED
+POSTING
+POSTED
+POSTING_FAILED
+REVERSED
+```
+
+## Money Movement
+
+```text
+NOT_REQUIRED
+PLANNED
+READY
+FILE_GENERATED
+SUBMITTED
+ACKNOWLEDGED
+SETTLED
+RETURNED
+FAILED
+```
+
+## Reconciliation
+
+```text
+NOT_STARTED
+IN_PROGRESS
+MATCHED
+PARTIAL
+EXCEPTION
+```
+
+## Notification
+
+```text
+NOT_REQUIRED
+QUEUED
+SENDING
+DELIVERED
+RETRYING
+FAILED
+DEAD_LETTER
+```
+
+---
+
+# 45. STATE TRANSITION CONTRACT
+
+Enums alone are insufficient.
+
+Before implementing transaction handlers, produce an explicit State Transition Matrix.
+
+For every state dimension define:
+
+```text
+current state
+allowed next state
+trigger
+guard
+financial side effect
+retryable?
+terminal?
+```
+
+Examples:
+
+```text
+BLOCKED → PENDING
+requires satisfied dependency
+
+POSTED → NOT_POSTED
+never legal
+```
+
+Do not permit arbitrary status assignment.
+
+Preserve immutable transition/audit history.
+
+This may use:
+
+```text
+StateTransition table
+```
+
+or an equivalent immutable audit-event mechanism.
+
+A dedicated table is not mandatory if equivalent durable evidence already exists.
+
+---
+
+# 46. DOUBLE-ENTRY LEDGER
+
+Journal records are authoritative financial accounting evidence.
+
+Create:
+
+```text
+Posting
+
+id
+transaction_id
+
+event_type
+
+idempotency_key
+
+currency
+correlation_id
+
+posting_template_version
+
+created_at
+
+reversal_of_posting_id
+```
+
+and:
+
+```text
+PostingLine
+
+id
+posting_id
+account_id
+
+direction
+
+amount
+```
+
+Direction:
+
+```text
+DEBIT
+CREDIT
+```
+
+Mandatory invariant:
+
+```text
+SUM(DEBITS)
+=
+SUM(CREDITS)
+```
+
+per posting and currency.
+
+---
+
+# 47. IMMUTABLE ACCOUNTING
+
+Posted journal records are immutable.
+
+Do not:
+
+```text
+UPDATE posting lines
+DELETE posting lines
+overwrite historical balances
+```
+
+Correction uses:
+
+```text
+new reversal/correction posting
+```
+
+Every reversal permanently references its original financial effect.
+
+---
+
+# 48. POSTING TEMPLATE REGISTRY
+
+Do not scatter debit/credit rules through transaction handlers.
+
+Use:
+
+```text
+LedgerEventFactory
++
+PostingTemplateRegistry
++
+PostingEngine
+```
+
+Before enabling any transaction type, create and approve a Posting Template Matrix.
+
+For each event define:
+
+```text
+event_type
+
+business trigger
+
+debit account role(s)
+
+credit account role(s)
+
+amount formula for every line
+
+required account dimensions
+
+parent transaction requirement
+
+reversal template
+
+template version
+```
+
+At minimum address:
+
+```text
+incoming payment
+
+customer principal recognition
+
+partner fee claim recognition
+
+payment reconciliation/finalization if separately required
+
+CPP
+
+CPC
+
+processor fee recognition
+
+CPR
+
+CPRR
+
+CPRRW effective route
+
+CPRRWX
+
+CPCN
+
+settlement reversal
+
+opening-position migration
+```
+
+Do not copy illustrative debit/credit examples blindly.
+
+The final matrix must be derived from the stated economic model and validated using acceptance fixtures.
+
+No financial code for a transaction type is complete until its posting matrix is explicit.
+
+---
+
+# 49. FINANCIAL POSITIONS
+
+Journal entries are authoritative.
+
+Maintain materialized FinancialPosition rows for fast execution.
+
+Expose:
+
+```text
+posted_balance
+reserved_balance
+available_balance
+```
+
+where:
+
+```text
+available
+=
+posted
+-
+active reservations
+```
+
+according to the account's economic interpretation.
+
+Materialized positions must always be rebuildable from:
+
+```text
+journal
++
+active reservation state
+```
+
+Never directly edit a position to fix accounting history.
+
+---
+
+# 50. FINANCIAL COMMIT BOUNDARY
+
+For one financial transaction, the following operations must form one PostgreSQL transaction where applicable:
+
+```text
+lock affected financial positions
+
+re-read posted/reserved values
+
+validate availability
+
+make financial decision
+
+create/update FinancialTransaction
+
+create/update financial reservation
+
+create Posting
+
+create all PostingLines
+
+update materialized FinancialPosition
+
+capture/release relevant reservations
+
+persist DecisionRecords
+
+create required durable follow-up WorkflowJobs
+
+COMMIT
+```
+
+Either all durable financial-state changes commit or none commit.
+
+Do not permit:
+
+```text
+reservation commits
+posting fails
+```
+
+or:
+
+```text
+posting commits
+required next-work disappears
+```
+
+External HTTP calls, SFTP movement and external bank operations must not occur inside this financial transaction.
+
+---
+
+# 51. CONCURRENCY
+
+Financial consumers must protect positions through PostgreSQL locking.
+
+Typical execution:
+
+```text
+BEGIN
+
+lock affected position rows
+
+re-read balances
+
+re-read active reservations
+
+validate eligibility
+
+create reservation/posting/state changes
+
+COMMIT
+```
+
+Two workers must never consume the same economic value.
+
+Required example:
+
+```text
+available = 100
+
+request A = 80
+request B = 80
+
+successful total <= 100
+```
+
+Run real PostgreSQL concurrency tests.
+
+Do not prove this only through mocked unit tests.
+
+---
+
+# 52. COMPETING INSTRUCTION PRIORITY
+
+Database locking prevents overspending but does not itself define business priority.
+
+Competing accepted instructions against the same financial support must have a durable, explainable priority.
+
+The exact mechanism is an implementation choice.
+
+Examples include:
+
+```text
+admitted_at
+batch sequence
+source row sequence
+dedicated monotonic sequence
+```
+
+The design must ensure that worker scheduling or random lock acquisition does not become undocumented financial business logic.
+
+Document the selected ordering strategy before implementation.
+
+---
+
+# 53. DURABLE WORKFLOW JOBS
+
+Do not reintroduce an external message broker for current scope.
+
+Use PostgreSQL-backed durable workflow jobs.
+
+Create:
+
+```text
+WorkflowJob
+
+id
+
+job_type
+
+aggregate_type
+aggregate_id
+
+dedupe_key
+
+status
+
+attempt_count
+next_attempt_at
+
+last_error
+
+created_at
+started_at
+completed_at
+```
+
+Examples:
+
+```text
+REEVALUATE_DEPENDENCY
+
+PLAN_MOVEMENT
+
+GENERATE_PAYMENT_FILE
+
+PROCESS_RECONCILIATION
+
+QUEUE_NOTIFICATION
+
+DELIVER_NOTIFICATION
+```
+
+Workers should safely claim jobs using PostgreSQL locking such as:
+
+```text
+FOR UPDATE SKIP LOCKED
+```
+
+or another proven equivalent.
+
+`dedupe_key` must prevent duplicate durable work.
+
+Notification work may share this durable-work infrastructure while retaining notification-specific delivery history.
+
+Avoid multiple competing queue abstractions.
+
+---
+
+# 54. FAILURE RECOVERY
+
+Design every workflow as:
+
+```text
+commit durable truth
+→ create durable next work
+→ perform external/asynchronous work
+```
+
+Never depend on in-memory continuation after financial commit.
+
+If the process crashes:
+
+```text
+before commit
+→ no partial financial result
+
+after commit
+→ durable workflow job remains available
+```
+
+Every retry must be idempotent.
+
+---
+
+# 55. MONEY MOVEMENT
+
+Accounting and physical money movement are separate.
+
+Create:
+
+```text
+MoneyMovement
+
+id
+
+transaction_id
+parent_transaction_id
+
+partner_id
+customer_program_id
+
+source_account_role
+destination_account_role
+
+beneficiary_reference
+
+amount
+currency
+
+rail
+sec_code
+account_type
+
+effective_date
+
+status
+
+external_bank_reference
+
+created_at
+settled_at
+```
+
+The movement is the canonical bank instruction.
+
+A NACHA file is a representation of approved MoneyMovements.
+
+Do not make the physical file the source of financial truth.
+
+---
+
+# 56. CURRENT LOGICAL MOVEMENT ROUTES
+
+Plan for routes equivalent to:
+
+## IM
+
+Incoming:
+
+```text
+Funding
+→ Pool Cash
+```
+
+Reversal:
+
+```text
+Pool Cash
+→ Funding
+```
+
+## CPP / CPC
+
+```text
+Pool Cash
+→ Partner Beneficiary
+```
+
+for partner net payout.
+
+## Processor Fee
+
+```text
+Pool Cash
+→ Processor Revenue destination
+```
+
+according to configured bank movement policy.
+
+## Customer Refund
+
+```text
+Pool Cash
+→ Refund/Check Settlement
+```
+
+or another configured beneficiary route.
+
+Accounting treatment and external money movement must remain independently traceable.
+
+---
+
+# 57. BANK-MOVEMENT PRODUCTION GATE
+
+MoneyMovement planning belongs to core scope.
+
+Actual bank-file production must not become production-enabled until all of these are resolved:
+
+```text
+RailAmountPolicy
+
+BeneficiaryAuthorityPolicy
+
+BusinessCalendarPolicy
+
+MovementFile lineage
+
+NACHA control validation
+
+bank destination configuration
+```
+
+These issues do not need to block parser, transaction, reservation or ledger development.
+
+---
+
+# 58. RAIL AMOUNT POLICY
+
+Internal accounting may use three-decimal values.
+
+A bank rail may not.
+
+Do not silently round.
+
+Before enabling a payment rail, define:
+
+```text
+currency
+
+rail
+
+allowed scale
+
+rounding rule
+
+residual treatment
+```
+
+Examples requiring policy:
+
+```text
+100.005 internal value
+→ ?
+
+when ACH can transmit only cents
+```
+
+Until an explicit business policy exists, non-representable amounts must prevent bank-file readiness rather than silently mutate value.
+
+---
+
+# 59. BENEFICIARY AUTHORITY POLICY
+
+Source-provided bank information can potentially redirect money.
+
+Do not assume whether source data or configured data has authority.
+
+Define a BeneficiaryAuthorityPolicy by source profile / transaction type.
+
+Supported patterns may include:
+
+```text
+CONFIGURATION_ONLY
+
+SOURCE_ALLOWED_IF_MATCHES_CONFIGURATION
+
+SOURCE_ALLOWED_FROM_WHITELIST
+
+SOURCE_AUTHORIZED
+```
+
+A mismatch produces:
+
+```text
+BENEFICIARY_AUTHORITY_EXCEPTION
+```
+
+Do not choose one universal policy until business configuration defines it.
+
+---
+
+# 60. BUSINESS CALENDAR
+
+Before bank-file production, create a BusinessCalendarPolicy for:
+
+```text
+business timezone
+
+weekends
+
+bank holidays
+
+cutoff times
+
+effective entry date
+```
+
+Store timestamps in UTC.
+
+Store business dates explicitly when they have independent meaning.
+
+Do not use one timestamp interchangeably for:
+
+```text
+source authorization
+
+source settlement
+
+system receipt
+
+financial posting
+
+payment effective date
+
+bank settlement
+```
+
+---
+
+# 61. MOVEMENT / FILE LINEAGE
+
+When multiple movements are consolidated into one physical bank-file entry, transaction-level lineage must remain intact.
+
+Use concepts equivalent to:
+
+```text
+MovementFile
+
+MovementFileEntry
+
+MovementFileEntryMember
+```
+
+A `MovementFileEntryMember` links:
+
+```text
+one physical file entry
+↔
+one or more underlying MoneyMovements
+```
+
+The sum of member allocations must equal the bank entry amount.
+
+One MoneyMovement must not accidentally appear in multiple active/submitted payment files.
+
+File regeneration must not create duplicate financial movements.
+
+---
+
+# 62. RECONCILIATION
+
+Maintain three separate reconciliation dimensions.
+
+## Source Reconciliation
+
+Did the engine correctly process the external instruction?
+
+## Accounting Reconciliation
+
+Did the intended financial accounting commit successfully?
+
+## Bank Reconciliation
+
+Did the external cash movement actually settle?
+
+Never collapse these into one generic `RECONCILED` status.
+
+Payment-file generation is not bank settlement.
+
+---
+
+# 63. BANK EVIDENCE
+
+The schema should be capable of storing bank evidence such as:
+
+```text
+payment file acknowledgement
+
+bank reference
+
+trace number
+
+settlement confirmation
+
+return
+
+failure
+```
+
+Automated bank-settlement matching is not mandatory for initial implementation.
+
+Where matching is later implemented, use durable attributes such as:
+
+```text
+movement identity
+
+payment-file identity
+
+trace/reference
+
+amount
+
+account
+
+effective date
+```
+
+Ambiguous bank evidence must create a reconciliation exception.
+
+---
+
+# 64. BANK RETURNS
+
+Support the `RETURNED` state architecturally.
+
+Detailed return accounting is not required in the initial parity phase unless explicitly added to scope.
+
+If return evidence is received and no approved accounting policy exists:
+
+```text
+record return evidence
+
+mark reconciliation exception
+
+do not invent accounting
+```
+
+---
+
+# 65. NOTIFICATION OUTBOX
+
+Never deliver external notifications inside the financial database transaction.
+
+Create:
+
+```text
+NotificationOutbox
+
+id
+
+partner_id
+
+event_type
+aggregate_id
+
+payload
+
+idempotency_key
+
+status
+
+attempt_count
+next_attempt_at
+
+created_at
+delivered_at
+```
+
+Notification delivery failure must never change accounting truth.
+
+---
+
+# 66. NOTIFICATION ATTEMPTS
+
+Persist:
+
+```text
+NotificationAttempt
+
+id
+notification_id
+
+attempt_number
+
+started_at
+completed_at
+
+http_status
+
+transport_result
+
+sanitized_response
+
+error
+```
+
+Lifecycle may include:
+
+```text
+QUEUED
+SENDING
+DELIVERED
+RETRYING
+FAILED
+DEAD_LETTER
+```
+
+Support controlled manual retry.
+
+Prevent duplicate external delivery where possible using notification idempotency.
+
+---
+
+# 67. SETTLEMENT NOTIFICATION
+
+The system must be able to produce a settlement result containing equivalent business information to:
+
+```text
+BatchId
+
+Status
+
+TotalAmountRequested
+
+TotalAmountSettled
+
+TotalProcessorFeeCharged
+
+UnReconciledAmount
+
+TransactionsDetails
+```
+
+Transaction-level detail should include:
+
+```text
+business/root reference
+
+AmountRequested
+
+AmountSettled
+
+UnReconciledAmount
+
+ProcessorFee
+
+Status
+
+ReconciliationStatus
+
+ReconciliationFailureMessage
+
+Message
+
+BalanceAmount
+```
+
+Use semantic financial values internally and map them to compatibility/reporting fields only at the notification boundary.
+
+---
+
+# 68. DECISION AUDIT
+
+Create:
+
+```text
+DecisionRecord
+
+id
+transaction_id
+
+decision_type
+
+policy_version
+
+input_snapshot
+
+output
+
+reason
+
+created_at
+```
+
+Examples:
+
+```text
+CUSTOMER_RESOLUTION
+
+INSTRUCTION_IDENTITY
+
+DUPLICATE_CHECK
+
+ELIGIBILITY
+
+RESERVATION
+
+CPRRW_ROUTE
+
+PROCESSOR_FEE
+
+CPC_ALLOCATION
+
+REFUND_FUNDING
+
+BENEFICIARY_AUTHORITY
+```
+
+The system must explain why an instruction received its treatment without depending solely on application logs.
+
+Snapshots must be sanitized.
+
+---
+
+# 69. FINANCIAL EXCEPTIONS
+
+Create a durable queryable exception model.
+
+Examples:
+
+```text
+UNKNOWN_CUSTOMER
+
+AMBIGUOUS_CUSTOMER
+
+WRONG_PROGRAM
+
+UNSUPPORTED_TRANSACTION
+
+DUPLICATE_INSTRUCTION
+
+IDEMPOTENCY_CONFLICT
+
+MISSING_ORIGINAL_PAYMENT
+
+ORIGINAL_PAYMENT_PENDING
+
+INSUFFICIENT_CUSTOMER_FUNDS
+
+INSUFFICIENT_PARTNER_FEE_CLAIM
+
+INSUFFICIENT_TOTAL_SUPPORT
+
+INVALID_REFUND
+
+OVER_REVERSAL
+
+BENEFICIARY_AUTHORITY_EXCEPTION
+
+RAIL_PRECISION_EXCEPTION
+
+ACCOUNTING_FAILURE
+
+MOVEMENT_FAILURE
+
+RECONCILIATION_EXCEPTION
+
+NOTIFICATION_FAILURE
+```
+
+No material financial failure should exist only in logs.
+
+---
+
+# 70. SECURITY
+
+Financial evidence may contain sensitive data.
+
+Requirements:
+
+```text
+secrets outside source code
+
+bank information encrypted at rest
+
+raw financial evidence encrypted/restricted
+
+full bank account numbers masked in logs
+
+full card numbers not stored in normalized domain tables unless explicitly approved
+
+prefer token/reference/last-four where possible
+
+decision snapshots sanitized
+
+notification payload logs sanitized
+
+credentials never stored in request/response audit
+
+partner-level API isolation
+
+administrative financial actions audited
+```
+
+Raw source evidence and normalized operational data may have different retention policies.
+
+Make retention configurable.
+
+---
+
+# 71. PROCESSING REPORTS
+
+Every batch should expose an operational report containing at least:
+
+```text
+filename
+
+file hash
+
+batch ID
+
+records received
+
+accepted
+
+blocked
+
+rejected
+
+failed
+
+gross incoming payments
+
+customer principal recognized
+
+customer fees recognized
+
+partner settlement requested
+
+partner settlement completed
+
+processor fees
+
+refunds requested
+
+refunds completed
+
+money movements
+
+ledger postings
+
+ledger failures
+
+notification status
+```
+
+---
+
+# 72. API
+
+Minimum operational API:
+
+## Batch
+
+```text
+POST /batches/upload
+
+GET /batches/{id}
+
+GET /batches/{id}/records
+
+GET /batches/{id}/transactions
+
+GET /batches/{id}/errors
+
+POST /batches/{id}/retry-blocked
+```
+
+## Transaction
+
+```text
+GET /transactions/{id}
+
+GET /transactions/{id}/decisions
+
+GET /transactions/{id}/dependencies
+
+GET /transactions/{id}/reservations
+
+GET /transactions/{id}/postings
+
+GET /transactions/{id}/movements
+```
+
+## Customer Program
+
+```text
+GET /customer-programs/{id}
+
+GET /customer-programs/{id}/positions
+
+GET /customer-programs/{id}/ledger
+```
+
+## Operations
+
+```text
+GET /exceptions
+
+GET /workflow-jobs
+
+GET /health
+```
+
+## Notifications
+
+```text
+GET /notifications/{id}
+
+POST /notifications/{id}/retry
+```
+
+Mutation APIs affecting financial truth must be tightly controlled and audited.
+
+---
+
+# 73. CLI
+
+Support commands such as:
+
+```text
+engine inspect <file>
+
+engine validate <file>
+
+engine process <file>
+
+engine retry-blocked <batch-id>
+
+engine rebuild-balances
+
+engine verify-ledger
+```
+
+Later migration tooling should include separate commands for controlled opening-position import.
+
+---
+
+# 74. SFTP
+
+SFTP is an adapter, not the financial engine.
+
+Support folder patterns such as:
+
+```text
+/{partner}/Upload
+
+/{partner}/PickedUp
+
+/{partner}/Processed
+
+/{partner}/Error
+```
+
+Conceptual flow:
+
+```text
+discover
+
+fingerprint
+
+claim
+
+create durable evidence
+
+process
+
+archive
+```
+
+SFTP processing and direct API upload must feed the same internal intake pipeline and produce the same financial result.
+
+---
+
+# 75. DIRECT UPLOAD
+
+Support:
+
+```text
+POST /batches/upload
+```
+
+Processing the same logical source through SFTP or direct upload must not produce different financial behavior.
+
+---
+
+# 76. FINANCIAL INVARIANTS
+
+These are mandatory.
+
+## Invariant 1
+
+Every committed posting balances.
+
+```text
+DEBITS = CREDITS
+```
+
+## Invariant 2
+
+No source instruction produces the same financial effect twice.
+
+## Invariant 3
+
+Customer principal cannot be spent twice.
+
+## Invariant 4
+
+Partner fee claim cannot be settled twice.
+
+## Invariant 5
+
+Processor fee cannot exceed the authorized parent settlement basis.
+
+## Invariant 6
+
+Every refund identifies its economic funding source.
+
+## Invariant 7
+
+Every system-generated financial transaction identifies its parent.
+
+## Invariant 8
+
+Blocked transactions produce no final unsupported financial effect.
+
+## Invariant 9
+
+A failed posting leaves no partial journal.
+
+## Invariant 10
+
+Notification failure cannot change accounting truth.
+
+## Invariant 11
+
+Payment-file generation does not imply bank settlement.
+
+## Invariant 12
+
+Current financial positions can be rebuilt from authoritative journal history.
+
+## Invariant 13
+
+Reservation capture and corresponding value consumption cannot diverge.
+
+## Invariant 14
+
+A retry after configuration changes cannot silently alter an already accepted financial decision.
+
+## Invariant 15
+
+A physical payment-file entry remains traceable to all underlying financial movements.
+
+---
+
+# 77. GOLDEN BUSINESS ACCEPTANCE FIXTURES
+
+Maintain a development-only compatibility/acceptance fixture suite.
+
+The agent must treat these fixtures as normative business examples.
+
+The fixtures should describe business inputs and expected economic outcomes without depending on another application's implementation.
+
+Example:
+
+```text
+INPUT
+
+IM gross = 100
+customer fee = 25
+
+EXPECTED
+
+customer principal +75
+partner fee claim +25
+```
+
+Example:
+
+```text
+INPUT
+
+CPP = 100
+available fee claim = 100
+processor fee = 4
+
+EXPECTED
+
+partner fee claim -100
+partner net payout +96
+processor revenue +4
+```
+
+Example:
+
+```text
+INPUT
+
+CPC = 100
+
+customer principal = 70
+partner fee claim = 30
+
+processor fee = 4
+
+EXPECTED
+
+customer principal -70
+partner fee claim -30
+
+partner net payout +96
+processor revenue +4
+```
+
+Golden fixtures compare:
+
+```text
+instruction result
+
+effective transaction code
+
+semantic monetary components
+
+reservation effects
+
+financial-position deltas
+
+posting roles and amounts
+
+movement amount/route
+
+final state
+
+notification financial totals
+```
+
+They must not compare irrelevant implementation details such as:
+
+```text
+internal database IDs
+timestamps
+module names
+database table naming
+deployment architecture
+```
+
+Any intentional deviation from an existing approved fixture must be explicitly documented and approved.
+
+---
+
+# 78. MANDATORY TESTS — CLEARING
+
+Test:
+
+```text
+valid IM
+
+duplicate IM
+
+IM with customer fee
+
+IM with merchant/acquirer fee
+
+invalid clearing equation
+
+CPR with valid original payment
+
+CPR before original payment
+
+CPR while original payment prerequisite pending
+
+CPR wrong customer program
+
+duplicate CPR
+
+partial batch failure
+
+same physical file replay
+
+same instruction replay
+
+different source instructions referencing same authorization
+```
+
+---
+
+# 79. MANDATORY TESTS — CPP
+
+Test:
+
+```text
+fee claim sufficient
+
+fee claim insufficient
+
+active reservation consuming fee claim
+
+contingent dependency
+
+duplicate CPP
+
+related CPP after same business root
+
+processor fee calculation
+
+pricing version frozen on retry
+
+settlement reversal
+```
+
+---
+
+# 80. MANDATORY TESTS — CPC
+
+Test:
+
+```text
+principal only
+
+fee claim only
+
+combined principal + fee claim
+
+combined insufficient
+
+existing queued settlement
+
+competing CPP
+
+duplicate CPC
+
+second legitimate related action where allowed
+
+CPC reversal
+
+CPC completion lifecycle protection
+```
+
+---
+
+# 81. MANDATORY TESTS — REFUNDS
+
+Test:
+
+```text
+CPRR principal sufficient
+
+CPRR principal insufficient
+
+CPRRW → CPRR
+
+CPRRW internal fee support route
+
+CPRRW → CPRRWX
+
+CPRRW globally insufficient
+
+CPR normal reversal
+
+CPR extended-support scenario
+
+CPCN valid cancellation
+
+CPCN over reversal
+
+duplicate refund
+
+cross-customer refund
+
+same root with multiple legitimate related instructions
+```
+
+---
+
+# 82. MANDATORY RESERVATION TESTS
+
+Run:
+
+```text
+two concurrent CPPs against same claim
+
+two concurrent CPCs
+
+CPP versus CPC competing for fee claim
+
+refund versus CPC competing for customer principal
+
+reservation capture with posting
+
+posting failure before capture
+
+reservation release
+
+contingent reservation becoming active
+
+blocked dependency resolution
+```
+
+Successful economic commitments must never exceed eligible support.
+
+---
+
+# 83. MANDATORY LEDGER TESTS
+
+Test:
+
+```text
+balanced posting
+
+unbalanced posting rejected
+
+multi-line atomic posting
+
+failure midway through posting
+→ zero persisted lines
+
+same posting replay
+→ one journal effect
+
+concurrent duplicate posting
+
+full reversal
+
+partial reversal
+
+over reversal rejected
+
+balance projection rebuild
+
+projection mismatch detection
+```
+
+---
+
+# 84. MANDATORY WORKFLOW/FAILURE TESTS
+
+Inject process failure:
+
+```text
+after file evidence creation
+
+after source record parse
+
+after FinancialTransaction creation
+
+after reservation
+
+during posting
+
+after posting
+
+before WorkflowJob creation
+
+after commit
+
+during movement planning
+
+after movement planning
+
+during payment-file generation
+
+before notification outbox
+
+during webhook delivery
+```
+
+Prove after each failure:
+
+```text
+financial truth remains explainable
+
+ledger remains balanced
+
+no duplicate value is created
+
+reservation state remains explainable
+
+retry is safe
+
+required follow-up work can recover
+```
+
+---
+
+# 85. MANDATORY CONCURRENCY TESTS
+
+Use real PostgreSQL transactions for:
+
+```text
+same financial position / two debits
+
+same fee claim / two CPPs
+
+CPP versus CPC
+
+refund versus CPC
+
+same instruction / two workers
+
+same batch / two workers
+
+two batches competing against the same customer program
+```
+
+Do not rely only on unit-test mocks.
+
+---
+
+# 86. PROPERTY-BASED TESTING
+
+Use Hypothesis for invariants including:
+
+```text
+all postings balance
+
+reservation amount never negative
+
+no double capture
+
+no captured + released state
+
+no over-reversal
+
+no duplicate financial effect
+
+semantic amount equations hold
+
+movement member allocations equal file-entry amount
+```
+
+---
+
+# 87. PERFORMANCE
+
+Initial target:
+
+```text
+tens of thousands of source rows
+```
+
+Avoid one external/database query per row where bulk retrieval is possible.
+
+Batch-load where practical:
+
+```text
+customers
+
+customer programs
+
+existing instruction identities
+
+business references
+
+financial positions
+
+active reservations
+
+pricing policies
+```
+
+Correctness remains more important than throughput.
+
+---
+
+# 88. OBSERVABILITY
+
+Every batch has:
+
+```text
+correlation_id
+```
+
+Every downstream object must remain traceable:
+
+```text
+FileEvidence
+
+→ Batch
+
+→ BatchRecord
+
+→ FinancialTransaction
+
+→ Dependency
+
+→ Reservation
+
+→ Decision
+
+→ Posting
+
+→ MoneyMovement
+
+→ Payment File Entry
+
+→ Reconciliation Evidence
+
+→ Notification
+```
+
+Metrics should include:
+
+```text
+files received
+
+records accepted/rejected/blocked
+
+financial transactions created
+
+reservation conflicts
+
+posting failures
+
+workflow retries
+
+movement failures
+
+reconciliation exceptions
+
+notification failures
+
+dead-letter work
+```
+
+---
+
+# 89. BALANCE REBUILD
+
+Implement:
+
+```text
+engine rebuild-balances
+```
+
+It must reconstruct materialized FinancialPositions from authoritative accounting history.
+
+Then compare:
+
+```text
+reconstructed
+vs
+stored
+```
+
+Any mismatch creates a critical exception.
+
+Do not silently repair the mismatch unless an explicit operation is requested.
+
+---
+
+# 90. LEDGER VERIFICATION
+
+Implement:
+
+```text
+engine verify-ledger
+```
+
+Check:
+
+```text
+every posting balances
+
+every posting belongs to a financial transaction
+
+every reversal references a valid original
+
+every position reconciles to accounting
+
+no duplicate financial idempotency keys
+
+no orphan active reservations
+
+no orphan money movements
+
+no duplicate movement-file inclusion
+
+semantic monetary equations hold
+```
+
+---
+
+# 91. OPENING POSITIONS — PRE-CUTOVER REQUIREMENT
+
+Do not block early engine development on migration tooling.
+
+Before production replacement/cutover, implement controlled opening positions.
+
+Never initialize production financial truth by directly setting balance rows.
+
+Use audited balanced postings such as:
+
+```text
+OPENING_POSITION
+```
+
+Every imported opening amount must identify:
+
+```text
+customer program
+
+financial account/role
+
+currency
+
+amount
+
+source evidence
+
+cutoff timestamp
+```
+
+After import:
+
+```text
+rebuild-balances
+
+verify-ledger
+```
+
+must reconcile exactly.
+
+---
+
+# 92. CUTOVER OWNERSHIP
+
+Before a production cutover:
+
+```text
+no financial obligation may be active in two systems simultaneously
+```
+
+Each outstanding item must be:
+
+```text
+completed before cutoff
+
+or
+
+explicitly migrated
+
+or
+
+formally frozen/cancelled
+```
+
+Opening balances without outstanding obligation treatment are not sufficient for a safe cutover.
+
+---
+
+# 93. DEVELOPMENT PHASES
+
+## Phase 0 — Financial Design Gate
+
+Before writing financial transaction handlers, produce:
+
+```text
+Source Identity Mapping
+
+Monetary Component Matrix
+
+Financial Account Matrix
+
+Posting Template Matrix
+
+Transaction State Transition Matrix
+
+Reservation Matrix
+
+Financial Commit Boundary
+
+Concurrency Strategy
+
+Durable Workflow Design
+
+Reference Data Model
+
+Configuration Versioning Strategy
+
+Golden Fixture Matrix
+
+Open Questions
+```
+
+Do not implement a financial transaction type whose economic treatment remains materially ambiguous.
+
+---
+
+## Phase 1 — Foundation
+
+Implement:
+
+```text
+project structure
+
+configuration
+
+PostgreSQL
+
+Alembic
+
+money types
+
+unit of work
+
+structured logging
+
+testing foundation
+
+security helpers
+```
+
+---
+
+## Phase 2 — Reference Domain
+
+Implement:
+
+```text
+Partner
+
+Program
+
+Customer
+
+CustomerProgram
+
+PricingPolicy
+
+BankAccountConfiguration
+
+controlled import/API
+```
+
+---
+
+## Phase 3 — Intake
+
+Implement:
+
+```text
+FileEvidence
+
+Batch
+
+BatchRecord
+
+ValidationIssue
+
+fingerprinting
+
+clearing parser
+
+settlement parser
+
+normalization
+
+source identity mapping
+```
+
+---
+
+## Phase 4 — Transaction Core
+
+Implement:
+
+```text
+FinancialTransaction
+
+semantic monetary fields
+
+TransactionDependency
+
+idempotency
+
+state transition mechanism
+
+DecisionRecord
+
+FinancialException
+```
+
+---
+
+## Phase 5 — Ledger
+
+Implement:
+
+```text
+FinancialAccount
+
+Posting
+
+PostingLine
+
+PostingTemplateRegistry
+
+PostingEngine
+
+reversal
+
+FinancialPosition
+
+rebuild-balances
+
+verify-ledger
+```
+
+---
+
+## Phase 6 — Clearing
+
+Implement:
+
+```text
+IM
+
+CPR
+```
+
+including golden fixtures.
+
+---
+
+## Phase 7 — Reservations / Concurrency
+
+Implement:
+
+```text
+Reservation
+
+ACTIVE/CONTINGENT semantics
+
+capture/release/cancel
+
+position locking
+
+real PostgreSQL concurrency tests
+```
+
+---
+
+## Phase 8 — Settlement
+
+Implement:
+
+```text
+CPP
+
+CPC
+
+CPRR
+
+CPRRW
+
+CPRRWX
+
+CPCN
+
+PFP
+
+VPF
+```
+
+one controlled policy at a time.
+
+A transaction type is not complete until:
+
+```text
+identity
+amounts
+reservation
+posting
+state transitions
+reversal behavior
+fixtures
+tests
+```
+
+are complete.
+
+---
+
+## Phase 9 — Durable Workflow
+
+Implement:
+
+```text
+WorkflowJob
+
+claiming
+
+retry
+
+dedupe
+
+dependency reevaluation
+
+post-commit follow-up
+```
+
+---
+
+## Phase 10 — Money Movement Planning
+
+Implement:
+
+```text
+MoneyMovement
+
+movement routing
+
+lineage
+
+planning state
+```
+
+Do not enable physical bank-file production yet unless the production gate policies are resolved.
+
+---
+
+## Phase 11 — Reconciliation
+
+Implement:
+
+```text
+source reconciliation
+
+accounting reconciliation
+
+bank reconciliation data model
+```
+
+Initial bank automation may remain limited.
+
+---
+
+## Phase 12 — Notifications
+
+Implement:
+
+```text
+NotificationOutbox
+
+NotificationAttempt
+
+settlement payload builder
+
+delivery
+
+retry
+
+dead letter
+
+manual retry
+```
+
+---
+
+## Phase 13 — File Adapters
+
+Implement:
+
+```text
+direct upload
+
+SFTP adapter
+
+same internal intake path
+```
+
+---
+
+## Phase 14 — Bank File Readiness
+
+Before activating NACHA/file generation, resolve and implement:
+
+```text
+RailAmountPolicy
+
+BeneficiaryAuthorityPolicy
+
+BusinessCalendarPolicy
+
+MovementFile
+
+MovementFileEntry
+
+MovementFileEntryMember
+
+NACHA validation
+```
+
+Then implement physical file generation.
+
+---
+
+## Phase 15 — Hardening
+
+Complete:
+
+```text
+golden compatibility tests
+
+property tests
+
+failure injection
+
+concurrency tests
+
+security review
+
+ledger verification
+
+balance rebuild
+
+operational observability
+
+performance validation
+```
+
+---
+
+## Phase 16 — Production Migration Workstream
+
+Only when production cutover becomes relevant:
+
+```text
+opening-position import
+
+cutoff certification
+
+outstanding transaction migration
+
+reservation migration/freeze rules
+
+dual-processing prevention
+
+cutover verification
+```
+
+---
+
+# 94. AGENT WORKING RULES
+
+Follow these rules throughout development.
+
+1. Treat this prompt as the product and architecture specification.
+
+2. Treat supplied business acceptance fixtures as normative financial examples.
+
+3. Do not assume another application's internal architecture.
+
+4. Do not reproduce another application's defects.
+
+5. Do not invent undefined rules that change money.
+
+6. If ambiguity affects money, create an `OPEN_QUESTION`.
+
+7. Continue unrelated implementation work where possible.
+
+8. Never use float for financial values.
+
+9. Never directly overwrite authoritative financial balances.
+
+10. Never edit/delete posted journal records.
+
+11. Never commit a partial posting.
+
+12. Never calculate availability without considering active reservations.
+
+13. Never let retry duplicate a financial effect.
+
+14. Never interpret payment-file generation as bank settlement.
+
+15. Keep accounting separate from external movement.
+
+16. Keep notification delivery separate from accounting.
+
+17. Keep source file transcodes at the adapter/domain-command boundary where practical.
+
+18. Persist requested and effective transaction codes when transformation occurs.
+
+19. Keep financial policy independently testable.
+
+20. Use database constraints for financial integrity whenever practical.
+
+21. Prefer PostgreSQL transactions and locking to application-only concurrency assumptions.
+
+22. Avoid infrastructure not required by present scope.
+
+23. Do not begin with UI.
+
+24. Do not over-generalize the solution into a generic banking platform.
+
+25. Implement one financially complete vertical capability before adding the next.
+
+---
+
+# 95. REQUIRED FIRST ASSIGNMENT
+
+Do not start coding IM, CPP, CPC, refunds or ledger posting immediately.
+
+First produce a design package containing:
+
+## A. Repository Structure
+
+Proposed Python package/module layout.
+
+## B. Complete PostgreSQL Schema
+
+Tables, keys, unique constraints and critical indexes.
+
+## C. Source Identity Matrix
+
+For Clearing and Settlement define:
+
+```text
+physical record identity
+
+logical instruction identity
+
+business/root reference
+
+parent relationship
+
+retry/idempotency identity
+```
+
+List any ambiguity explicitly.
+
+## D. Canonical Monetary Component Matrix
+
+For each supported transaction type define:
+
+```text
+semantic field
+
+source/calculation
+
+formula
+
+sign
+
+currency
+
+financial meaning
+```
+
+## E. Financial Account Matrix
+
+For each financial role define:
+
+```text
+account class
+
+normal side
+
+owner scope
+
+currency scope
+
+negative-balance behavior
+```
+
+## F. Posting Template Matrix
+
+For every enabled accounting event define:
+
+```text
+debit account roles
+
+credit account roles
+
+amount formulas
+
+parent relationship
+
+reversal template
+```
+
+Do not treat illustrative accounting examples as approved rules without validating the economics.
+
+## G. State Transition Matrix
+
+For every state dimension define all legal transitions and guards.
+
+## H. Reservation Matrix
+
+For every transaction type define:
+
+```text
+position affected
+
+amount
+
+ACTIVE vs CONTINGENT
+
+activation trigger
+
+capture trigger
+
+release trigger
+
+cancellation trigger
+```
+
+## I. Commit Boundary Design
+
+Show exactly what commits atomically in PostgreSQL.
+
+## J. Concurrency Design
+
+Show locking and competing-instruction priority.
+
+## K. Durable Workflow Design
+
+Show WorkflowJob types, dedupe and retry behavior.
+
+## L. Reference Data Bootstrap
+
+Explain how a clean deployment obtains:
+
+```text
+partners
+
+programs
+
+customers
+
+customer programs
+
+pricing
+
+bank configuration
+```
+
+## M. Configuration Version Strategy
+
+Only for materially financial configuration.
+
+## N. Golden Acceptance Fixture Matrix
+
+Cover all current transaction types.
+
+## O. Bank-Production Open Questions
+
+Specifically identify unresolved:
+
+```text
+rail precision
+
+beneficiary authority
+
+business calendar
+
+bank-file requirements
+```
+
+These do not block non-bank core development.
+
+## P. Migration/Cutover Open Questions
+
+Keep these separate from current engine implementation.
+
+## Q. Risk Review
+
+Identify any specification ambiguity that could:
+
+```text
+create duplicate money
+
+lose money
+
+consume the wrong owner's funds
+
+misstate balance
+
+produce unbalanced accounting
+
+send money to the wrong destination
+
+make recovery unsafe
+```
+
+Then perform a self-review of the proposed design against this complete specification.
+
+Only after the design package is internally coherent should implementation begin.
+
+---
+
+# 96. PHASE DELIVERY FORMAT
+
+After every implementation phase, report:
+
+## Completed
+
+Exact components implemented.
+
+## Schema Changes
+
+Tables, indexes, migrations or constraints created.
+
+## Financial Behavior
+
+Exact financial rules now supported.
+
+## Tests
+
+Tests added and their result.
+
+## Invariants Verified
+
+Financial safety properties proven.
+
+## Open Questions
+
+Only unresolved issues that materially affect correctness or the next phase.
+
+## Deferred Scope
+
+Anything deliberately deferred because it belongs to:
+
+```text
+bank production
+
+migration/cutover
+
+later architecture
+```
+
+## Next
+
+The next smallest financially complete development phase.
+
+Do not expand scope merely because an adjacent feature could be built.
+
+---
+
+# 97. DEFINITION OF DONE — CORE ENGINE
+
+The core financial engine is complete when:
+
+```text
+clearing batches process end to end
+
+settlement batches process end to end
+
+customer/program resolution is deterministic
+
+identity and business-reference relationships are explicit
+
+duplicate instructions cannot double-fund
+
+IM correctly recognizes supported customer value
+
+CPR dependency handling works
+
+CPP consumes the correct fee claim
+
+CPC consumes the correct supported combination
+
+refund routes are deterministic
+
+PFP/VPF relationships are explicit
+
+reservations prevent overspending
+
+concurrent requests cannot overspend
+
+every accounting event is balanced
+
+every accounting event is atomic
+
+every financial effect is idempotent
+
+every financial effect traces to source evidence
+
+reversals preserve history
+
+positions rebuild from journal history
+
+durable jobs recover post-commit work
+
+money movement remains separate from accounting
+
+source and accounting reconciliation are distinct
+
+notifications are durable and retry-safe
+
+operational users can explain every blocked/rejected/failed transaction
+
+golden business fixtures pass
+
+concurrency tests pass
+
+failure-injection tests pass
+
+property-based financial invariants pass
+```
+
+Bank-file generation has a separate production-readiness gate.
+
+Production migration/cutover has a separate readiness gate.
+
+Do not falsely label either complete merely because the core accounting engine is complete.
+
+---
+
+# 98. ENGINEERING STANDARD
+
+The implementation should favor:
+
+```text
+explicitness over cleverness
+
+financial semantics over generic abstraction
+
+small policy components over giant processors
+
+database guarantees over optimistic assumptions
+
+immutable evidence over mutable history
+
+deterministic recovery over manual repair
+
+semantic monetary names over ambiguous amount fields
+
+traceability over convenience
+
+controlled scope over speculative architecture
+```
+
+The objective is not to create the largest possible financial platform.
+
+The objective is to create the smallest system that correctly, safely and explainably executes the defined financial behavior and can be expanded one controlled capability at a time.
